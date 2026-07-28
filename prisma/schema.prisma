@@ -1,0 +1,373 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Organization {
+  id        String      @id @default(uuid())
+  name      String
+  slug      String      @unique
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  workspaces Workspace[]
+}
+
+model Workspace {
+  id             String                @id @default(uuid())
+  organizationId String
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  slug           String
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  memberships    WorkspaceMembership[]
+  brands         Brand[]
+  auditLogs      AuditLog[]
+  bulkOperations BulkOperation[]
+  analyticsSnapshots AnalyticsSnapshot[]
+  reports        Report[]
+
+  @@unique([organizationId, slug])
+}
+
+model User {
+  id          String                @id @default(uuid())
+  email       String                @unique
+  name        String
+  avatarUrl   String?
+  createdAt   DateTime              @default(now())
+  memberships WorkspaceMembership[]
+}
+
+model WorkspaceMembership {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        String    @default("OWNER")
+  // OWNER | ADMIN | MANAGER | EDITOR | DESIGNER | SEO_SPECIALIST | PUBLISHER | VIEWER
+  createdAt   DateTime  @default(now())
+
+  @@unique([workspaceId, userId])
+}
+
+// ─── Brand Template ────────────────────────────────────────────────────────────
+model BrandTemplate {
+  id                 String    @id @default(uuid())
+  workspaceId        String
+  name               String
+  description        String?
+  brandVoiceProfile  String?
+  defaultHashtags    String?
+  primaryLanguage    String    @default("en")
+  targetLanguages    String?
+  defaultPlatforms   String?   // comma-separated platform list
+  logoUrl            String?
+  primaryColor       String?   @default("#6366f1")
+  secondaryColor     String?   @default("#8b5cf6")
+  fontFamily         String?   @default("Inter")
+  createdAt          DateTime  @default(now())
+  brands             Brand[]
+}
+
+// ─── Brand Kit ────────────────────────────────────────────────────────────────
+model BrandKit {
+  id          String    @id @default(uuid())
+  brandId     String    @unique
+  brand       Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  logoUrl     String?
+  iconUrl     String?
+  primaryColor    String?  @default("#6366f1")
+  secondaryColor  String?  @default("#8b5cf6")
+  accentColor     String?  @default("#06b6d4")
+  fontPrimary     String?  @default("Inter")
+  fontSecondary   String?  @default("Roboto")
+  audioJingleUrl  String?
+  watermarkUrl    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Brand {
+  id                       String                   @id @default(uuid())
+  workspaceId              String
+  workspace                Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  templateId               String?
+  template                 BrandTemplate?           @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  name                     String
+  logoUrl                  String?
+  brandVoiceProfile        String?                  @default("Professional, engaging, concise.")
+  defaultHashtags          String?                  @default("#AI #Growth")
+  primaryLanguage          String                   @default("en")
+  targetLanguages          String?                  @default("es,fr,de,pt,ja,zh,ar,hi")
+  isActive                 Boolean                  @default(true)
+  isDuplicate              Boolean                  @default(false)
+  duplicatedFromId         String?
+  postsPublishedTotal      Int                      @default(0)
+  followerCountEstimate    Int                      @default(0)
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
+  socialAccounts           SocialAccount[]
+  cloudStorageConnections  CloudStorageConnection[]
+  mediaAssets              MediaAsset[]
+  contentItems             ContentItem[]
+  publishingQueue          PublishingQueueEntry[]
+  aiJobs                   AiJob[]
+  brandKit                 BrandKit?
+  approvalWorkflows        ApprovalWorkflow[]
+  analyticsSnapshots       AnalyticsSnapshot[]
+
+  @@index([workspaceId])
+}
+
+model SocialAccount {
+  id             String    @id @default(uuid())
+  brandId        String
+  brand          Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  platform       String
+  accountName    String
+  accountHandle  String
+  accountAvatar  String?
+  accessToken    String
+  refreshToken   String?
+  expiresAt      DateTime?
+  status         String    @default("ACTIVE")
+  followerCount  Int       @default(0)
+  connectedAt    DateTime  @default(now())
+
+  @@index([brandId])
+}
+
+model CloudStorageConnection {
+  id             String    @id @default(uuid())
+  brandId        String
+  brand          Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  provider       String
+  folderName     String
+  folderPath     String
+  remoteFolderId String?
+  bucketName     String?
+  region         String?
+  endpointUrl    String?
+  syncStatus     String    @default("ACTIVE")
+  lastPolledAt   DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([brandId])
+}
+
+// ─── Media Asset with Tags & Versions ────────────────────────────────────────
+model MediaAsset {
+  id              String         @id @default(uuid())
+  brandId         String
+  brand           Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  fileName        String
+  fileUrl         String
+  fileSizeBytes   Int
+  mimeType        String
+  durationSeconds Int?
+  aspectRatio     String?        @default("16:9")
+  checksum        String?
+  subtitleSrt     String?
+  subtitleUrl     String?
+  thumbnailUrl    String?
+  tags            String?        // comma-separated tags
+  versionNumber   Int            @default(1)
+  parentAssetId   String?        // references previous version
+  createdAt       DateTime       @default(now())
+  contentItems    ContentItem[]
+
+  @@index([brandId])
+}
+
+// ─── Approval Workflow (per brand, configurable stages) ───────────────────────
+model ApprovalWorkflow {
+  id              String                  @id @default(uuid())
+  brandId         String
+  brand           Brand                   @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  name            String                  @default("Standard Approval")
+  stages          String                  @default("DRAFT,EDITOR_REVIEW,MANAGER_REVIEW,OWNER_APPROVED")
+  isActive        Boolean                 @default(true)
+  createdAt       DateTime                @default(now())
+  contentItems    ContentItem[]
+
+  @@index([brandId])
+}
+
+model ContentItem {
+  id                   String           @id @default(uuid())
+  brandId              String
+  brand                Brand            @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  rawMediaId           String?
+  rawMedia             MediaAsset?      @relation(fields: [rawMediaId], references: [id], onDelete: SetNull)
+  approvalWorkflowId   String?
+  approvalWorkflow     ApprovalWorkflow? @relation(fields: [approvalWorkflowId], references: [id], onDelete: SetNull)
+  title                String
+  description          String?
+  status               String           @default("PROCESSING")
+  approvalStage        String?          @default("DRAFT")
+  // DRAFT | SUBMITTED | EDITOR_REVIEW | MANAGER_REVIEW | OWNER_APPROVED | PUBLISHED | REJECTED
+  approvedBy           String?
+  approvedAt           DateTime?
+  rejectedBy           String?
+  rejectionReason      String?
+  sourceType           String           @default("FOLDER_WATCHER")
+  isEvergreen          Boolean          @default(false)
+  recycleIntervalDays  Int?
+  lastRecycledAt       DateTime?
+  bulkOperationId      String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  variants             ContentVariant[]
+
+  @@index([brandId])
+  @@index([approvalStage])
+}
+
+model ContentVariant {
+  id                   String                 @id @default(uuid())
+  contentItemId        String
+  contentItem          ContentItem            @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  platform             String
+  aspectRatio          String                 @default("9:16")
+  derivedMediaUrl      String?
+  title                String?
+  caption              String?
+  hashtags             String?
+  tags                 String?
+  chaptersJson         String?
+  subtitleSrt          String?
+  subtitleUrl          String?
+  thumbnailUrl         String?
+  translationsJson     String?
+  needsHumanReview     Boolean              @default(false)
+  approvedAt           DateTime?
+  approvedBy           String?
+  status               String               @default("READY")
+  createdAt            DateTime             @default(now())
+  publishingQueueEntry PublishingQueueEntry[]
+
+  @@index([contentItemId])
+}
+
+model PublishingQueueEntry {
+  id               String         @id @default(uuid())
+  brandId          String
+  brand            Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  contentVariantId String
+  contentVariant   ContentVariant @relation(fields: [contentVariantId], references: [id], onDelete: Cascade)
+  targetPlatform   String
+  targetLanguage   String         @default("en")
+  scheduledAt      DateTime
+  publishedAt      DateTime?
+  status           String         @default("QUEUED")
+  retryCount       Int            @default(0)
+  publishedUrl     String?
+  errorLog         String?
+  isRecycled       Boolean        @default(false)
+  bulkOperationId  String?
+  createdAt        DateTime       @default(now())
+
+  @@index([brandId, scheduledAt])
+}
+
+model AiJob {
+  id            String    @id @default(uuid())
+  brandId       String
+  brand         Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  jobType       String
+  status        String    @default("PENDING")
+  promptPayload String
+  outputPayload String?
+  costCredits   Int       @default(1)
+  durationMs    Int?
+  errorLog      String?
+  createdAt     DateTime  @default(now())
+
+  @@index([brandId])
+}
+
+model AuditLog {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String?
+  action      String
+  entityType  String
+  entityId    String
+  details     String?
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId])
+}
+
+// ─── Bulk Operations ──────────────────────────────────────────────────────────
+model BulkOperation {
+  id            String    @id @default(uuid())
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  operationType String
+  // BULK_PUBLISH | BULK_SCHEDULE | BULK_TAG | BULK_DELETE | BULK_METADATA_UPDATE
+  status        String    @default("PENDING")
+  // PENDING | RUNNING | COMPLETED | PARTIAL | FAILED
+  targetCount   Int       @default(0)
+  successCount  Int       @default(0)
+  failedCount   Int       @default(0)
+  payload       String?   // JSON config for the operation
+  errorLog      String?
+  initiatedBy   String?
+  createdAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  @@index([workspaceId])
+}
+
+// ─── Analytics Snapshots ──────────────────────────────────────────────────────
+model AnalyticsSnapshot {
+  id              String    @id @default(uuid())
+  workspaceId     String
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  brandId         String
+  brand           Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  platform        String
+  snapshotDate    DateTime
+  postsPublished  Int       @default(0)
+  totalViews      Int       @default(0)
+  totalLikes      Int       @default(0)
+  totalComments   Int       @default(0)
+  totalShares     Int       @default(0)
+  totalFollowers  Int       @default(0)
+  followersGained Int       @default(0)
+  engagementRate  Float     @default(0)
+  reachEstimate   Int       @default(0)
+  createdAt       DateTime  @default(now())
+
+  @@index([workspaceId, brandId])
+  @@index([snapshotDate])
+}
+
+// ─── Enterprise Reports ───────────────────────────────────────────────────────
+model Report {
+  id           String    @id @default(uuid())
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name         String
+  reportType   String
+  // CROSS_BRAND | SINGLE_BRAND | PLATFORM_BREAKDOWN | EXECUTIVE_SUMMARY
+  brandIds     String?   // JSON array of brand IDs
+  dateRangeStart DateTime?
+  dateRangeEnd   DateTime?
+  schedule     String?   // cron expression for scheduled reports
+  lastGeneratedAt DateTime?
+  outputUrl    String?
+  status       String    @default("PENDING")
+  // PENDING | GENERATING | READY | FAILED
+  createdAt    DateTime  @default(now())
+
+  @@index([workspaceId])
+}
