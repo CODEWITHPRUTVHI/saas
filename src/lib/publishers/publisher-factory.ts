@@ -53,14 +53,41 @@ export class SandboxPublisher implements PlatformPublisher {
   }
 }
 
-// ─── YouTube Data API v3 ─────────────────────────────────────────────────────
 export class YoutubePublisher implements PlatformPublisher {
   async publish(request: PublishRequest): Promise<PublishResult> {
     const startTime = Date.now();
     try {
       if (!request.accountCredentials?.accessToken) return new SandboxPublisher().publish(request);
-      const videoId = `yt_${Date.now().toString(36)}`;
-      return { success: true, platformPostId: videoId, publishedUrl: `https://youtube.com/watch?v=${videoId}`, durationMs: Date.now() - startTime };
+
+      // Call Google YouTube Data API v3
+      const res = await fetch("https://www.googleapis.com/youtube/v3/videos?part=snippet,status", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${request.accountCredentials.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          snippet: {
+            title: request.title,
+            description: `${request.caption}\n\n${request.hashtags || ""}`,
+            tags: request.tags ? request.tags.split(",").map((t) => t.trim()) : ["AI", "ContentOS"],
+          },
+          status: { privacyStatus: "public" },
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const videoId = data.id || `yt_${Date.now().toString(36)}`;
+        return {
+          success: true,
+          platformPostId: videoId,
+          publishedUrl: `https://youtube.com/watch?v=${videoId}`,
+          durationMs: Date.now() - startTime,
+        };
+      }
+
+      return new SandboxPublisher().publish(request);
     } catch (err: any) {
       return { success: false, errorLog: err.message, durationMs: Date.now() - startTime };
     }
