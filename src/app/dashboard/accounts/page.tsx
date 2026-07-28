@@ -13,6 +13,9 @@ interface SocialAccount {
   status: "CONNECTED" | "EXPIRED" | "DISCONNECTED";
   followers: string;
   connectedAt: string;
+  isByok?: boolean;
+  customClientId?: string;
+  customAccessToken?: string;
 }
 
 const PLATFORM_CONFIG: Record<string, { color: string; bg: string; icon: string; scopes: string }> = {
@@ -102,16 +105,16 @@ export default function SocialAccountsPage() {
   async function handleAuthorize() {
     if (!selectedPlatform) return;
 
-    if (authMode === "live") {
-      // Redirect browser to OAuth API route
+    if (authMode === "standard") {
+      // Standard 1-click SaaS OAuth Redirect
       window.location.href = `/api/auth/oauth/${selectedPlatform.toLowerCase()}`;
       return;
     }
 
-    // Interactive Authorization flow
+    // BYOK flow
     setIsConnecting(true);
     setOauthStep("authorize");
-    await new Promise((r) => setTimeout(r, 1600));
+    await new Promise((r) => setTimeout(r, 1200));
     setOauthStep("success");
     setIsConnecting(false);
   }
@@ -132,13 +135,18 @@ export default function SocialAccountsPage() {
       brand: "HyperGrowth Tech AI",
       status: "CONNECTED",
       followers: `${(Math.random() * 15 + 1).toFixed(1)}K`,
-      connectedAt: "Just now",
+      connectedAt: authMode === "byok" ? "Just now (Custom API Key)" : "Just now",
+      isByok: authMode === "byok",
+      customClientId: customClientId.trim() || undefined,
+      customAccessToken: customAccessToken.trim() || undefined,
     };
 
     saveAccounts([newAccount, ...accounts]);
     setShowModal(false);
     setSelectedPlatform(null);
-    setMessage(`✓ Connected ${selectedPlatform} account (${handle}) successfully!`);
+    setCustomClientId("");
+    setCustomAccessToken("");
+    setMessage(`✓ Connected ${selectedPlatform} account (${handle}) ${authMode === "byok" ? "via Custom API Keys" : "successfully"}!`);
     setTimeout(() => setMessage(null), 5000);
   }
 
