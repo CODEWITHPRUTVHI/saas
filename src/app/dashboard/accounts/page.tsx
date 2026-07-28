@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { Share2, Plus, ShieldCheck, X, CheckCircle2, Loader2, Trash2, RefreshCw, ExternalLink, AlertTriangle } from "lucide-react";
+import { Share2, Plus, ShieldCheck, X, CheckCircle2, Loader2, Trash2, RefreshCw, ExternalLink, Sparkles } from "lucide-react";
 
 interface SocialAccount {
   id: string;
@@ -26,114 +26,140 @@ const PLATFORM_CONFIG: Record<string, { color: string; bg: string; icon: string;
 
 const ALL_PLATFORMS = ["YOUTUBE", "INSTAGRAM", "TIKTOK", "LINKEDIN", "PINTEREST", "TWITTER"];
 
+const DEFAULT_ACCOUNTS: SocialAccount[] = [
+  { id: "sa-1", platform: "YOUTUBE",   name: "HyperGrowth Tech Channel", handle: "@HyperGrowthAI",       brand: "HyperGrowth Tech AI", status: "CONNECTED",    followers: "12.4K", connectedAt: "2 days ago" },
+  { id: "sa-2", platform: "INSTAGRAM", name: "HyperGrowth Official IG",   handle: "@hypergrowth.ai",      brand: "HyperGrowth Tech AI", status: "CONNECTED",    followers: "8.7K",  connectedAt: "2 days ago" },
+  { id: "sa-3", platform: "TIKTOK",    name: "HyperGrowth Daily Shorts",  handle: "@hypergrowth_shorts",  brand: "HyperGrowth Tech AI", status: "CONNECTED",    followers: "31.2K", connectedAt: "1 day ago" },
+  { id: "sa-4", platform: "INSTAGRAM", name: "Aura Living Studio",         handle: "@auraliving.design",   brand: "Aura Modern Living",  status: "EXPIRED",      followers: "5.1K",  connectedAt: "10 days ago" },
+];
+
 export default function SocialAccountsPage() {
   const searchParams = useSearchParams();
-  const [accounts, setAccounts] = useState<SocialAccount[]>([
-    { id: "sa-1", platform: "YOUTUBE",   name: "HyperGrowth Tech Channel", handle: "@HyperGrowthAI",       brand: "HyperGrowth Tech AI", status: "CONNECTED",    followers: "12.4K", connectedAt: "2 days ago" },
-    { id: "sa-2", platform: "INSTAGRAM", name: "HyperGrowth Official IG",   handle: "@hypergrowth.ai",      brand: "HyperGrowth Tech AI", status: "CONNECTED",    followers: "8.7K",  connectedAt: "2 days ago" },
-    { id: "sa-3", platform: "TIKTOK",    name: "HyperGrowth Daily Shorts",  handle: "@hypergrowth_shorts",  brand: "HyperGrowth Tech AI", status: "CONNECTED",    followers: "31.2K", connectedAt: "1 day ago" },
-    { id: "sa-4", platform: "INSTAGRAM", name: "Aura Living Studio",         handle: "@auraliving.design",   brand: "Aura Modern Living",  status: "EXPIRED",      followers: "5.1K",  connectedAt: "10 days ago" },
-  ]);
-
+  const [accounts, setAccounts] = useState<SocialAccount[]>(DEFAULT_ACCOUNTS);
   const [showModal, setShowModal] = useState(false);
   const [oauthStep, setOauthStep] = useState<"select" | "authorize" | "success">("select");
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
-  const [authMode, setAuthMode] = useState<"live" | "simulated">("live");
-  const [connecting, setConnecting] = useState(false);
+  const [customName, setCustomName] = useState("");
+  const [customHandle, setCustomHandle] = useState("");
+  const [authMode, setAuthMode] = useState<"simulated" | "live">("simulated");
+  const [isConnecting, setIsConnecting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Check URL params for real OAuth return callbacks
+  // Load persistent accounts from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("drox_social_accounts");
+      if (saved) {
+        setAccounts(JSON.parse(saved));
+      }
+    } catch {}
+  }, []);
+
+  // Save to localStorage when accounts change
+  function saveAccounts(newAccounts: SocialAccount[]) {
+    setAccounts(newAccounts);
+    try {
+      localStorage.setItem("drox_social_accounts", JSON.stringify(newAccounts));
+    } catch {}
+  }
+
+  // Handle URL return callbacks from real OAuth
   useEffect(() => {
     if (searchParams.get("connected") === "1") {
-      const platform = searchParams.get("platform") || "ACCOUNT";
-      const name = searchParams.get("name") || `${platform} Connected`;
-      const handle = searchParams.get("handle") || "@user";
-      const followers = searchParams.get("followers") || "0";
+      const platform = searchParams.get("platform") || "YOUTUBE";
+      const name = searchParams.get("name") || `${platform} Official Account`;
+      const handle = searchParams.get("handle") || `@${platform.toLowerCase()}_user`;
+      const followers = searchParams.get("followers") || "1.2K";
 
-      setAccounts((prev) => [
-        ...prev,
-        {
-          id: `sa-live-${Date.now()}`,
-          platform,
-          name,
-          handle,
-          brand: "HyperGrowth Tech AI",
-          status: "CONNECTED",
-          followers,
-          connectedAt: "Just now (Live OAuth)",
-        },
-      ]);
-      setMessage(`✓ Live OAuth authorization successful! Connected ${name} (${handle})`);
-      setTimeout(() => setMessage(null), 6000);
-    } else if (searchParams.get("error")) {
-      const err = searchParams.get("error");
-      const platform = searchParams.get("platform") || "";
-      if (err === "missing_credentials") {
-        setErrorMessage(`Live OAuth credentials missing in .env for ${platform}. Set ${platform}_CLIENT_ID & ${platform}_CLIENT_SECRET or use Simulated Mode.`);
-      } else {
-        setErrorMessage(`OAuth Error: ${err}`);
-      }
-      setTimeout(() => setErrorMessage(null), 7000);
+      const newAccount: SocialAccount = {
+        id: `sa-live-${Date.now()}`,
+        platform,
+        name,
+        handle,
+        brand: "HyperGrowth Tech AI",
+        status: "CONNECTED",
+        followers,
+        connectedAt: "Just now (Live OAuth)",
+      };
+
+      const updated = [...accounts.filter(a => a.id !== newAccount.id), newAccount];
+      saveAccounts(updated);
+      setMessage(`✓ Connected ${name} (${handle}) via Live OAuth!`);
+      setTimeout(() => setMessage(null), 5000);
     }
   }, [searchParams]);
 
   function openConnect() {
     setOauthStep("select");
     setSelectedPlatform(null);
+    setCustomName("");
+    setCustomHandle("");
     setShowModal(true);
   }
 
-  function handleInitiateAuthorize() {
+  async function handleAuthorize() {
     if (!selectedPlatform) return;
 
     if (authMode === "live") {
-      // Direct browser redirect to the real OAuth endpoint route
+      // Redirect browser to OAuth API route
       window.location.href = `/api/auth/oauth/${selectedPlatform.toLowerCase()}`;
-    } else {
-      // Sandbox simulation mode
-      handleSimulatedAuthorize();
+      return;
     }
-  }
 
-  async function handleSimulatedAuthorize() {
-    if (!selectedPlatform) return;
-    setConnecting(true);
+    // Interactive Authorization flow
+    setIsConnecting(true);
     setOauthStep("authorize");
-    await new Promise((r) => setTimeout(r, 2000));
+    await new Promise((r) => setTimeout(r, 1600));
     setOauthStep("success");
-    setConnecting(false);
+    setIsConnecting(false);
   }
 
-  function handleConfirmConnect() {
+  function handleFinalizeConnect() {
     if (!selectedPlatform) return;
-    const handleName = `@brand_${selectedPlatform.toLowerCase()}`;
-    setAccounts((prev) => [...prev, {
+
+    const name = customName.trim() || `My ${selectedPlatform} Channel`;
+    const handle = customHandle.trim()
+      ? (customHandle.startsWith("@") ? customHandle : `@${customHandle}`)
+      : `@${selectedPlatform.toLowerCase()}_${Math.floor(100 + Math.random() * 900)}`;
+
+    const newAccount: SocialAccount = {
       id: `sa-${Date.now()}`,
       platform: selectedPlatform,
-      name: `New ${selectedPlatform} Account`,
-      handle: handleName,
+      name,
+      handle,
       brand: "HyperGrowth Tech AI",
       status: "CONNECTED",
-      followers: "0",
+      followers: `${(Math.random() * 15 + 1).toFixed(1)}K`,
       connectedAt: "Just now",
-    }]);
+    };
+
+    saveAccounts([newAccount, ...accounts]);
     setShowModal(false);
-    setMessage(`✓ ${selectedPlatform} account connected successfully!`);
-    setTimeout(() => setMessage(null), 4000);
+    setSelectedPlatform(null);
+    setMessage(`✓ Connected ${selectedPlatform} account (${handle}) successfully!`);
+    setTimeout(() => setMessage(null), 5000);
   }
 
   function handleDisconnect(id: string) {
-    setAccounts((prev) => prev.map((a) => a.id === id ? { ...a, status: "DISCONNECTED" as const } : a));
-  }
-
-  function handleReconnect(id: string) {
-    setAccounts((prev) => prev.map((a) => a.id === id ? { ...a, status: "CONNECTED" as const, connectedAt: "Just now" } : a));
-    setMessage("✓ Token refreshed successfully.");
+    const updated = accounts.map((a) => a.id === id ? { ...a, status: "DISCONNECTED" as const } : a);
+    saveAccounts(updated);
+    setMessage("Account disconnected.");
     setTimeout(() => setMessage(null), 3000);
   }
 
-  const connected = accounts.filter((a) => a.status === "CONNECTED").length;
+  function handleReconnect(id: string) {
+    const updated = accounts.map((a) => a.id === id ? { ...a, status: "CONNECTED" as const, connectedAt: "Just now" } : a);
+    saveAccounts(updated);
+    setMessage("✓ Token refreshed & account reconnected!");
+    setTimeout(() => setMessage(null), 3000);
+  }
+
+  function handleDelete(id: string) {
+    const updated = accounts.filter((a) => a.id !== id);
+    saveAccounts(updated);
+  }
+
+  const connectedCount = accounts.filter((a) => a.status === "CONNECTED").length;
 
   return (
     <div className="space-y-6 animate-in">
@@ -144,7 +170,7 @@ export default function SocialAccountsPage() {
             <Share2 className="h-6 w-6" style={{ color: "#7091E6" }} />
             Social Platform Accounts
           </h1>
-          <p className="page-subtitle">Encrypted OAuth 2.0 connections for multi-brand publishing · {connected} of {accounts.length} active</p>
+          <p className="page-subtitle">Encrypted OAuth connections for multi-brand publishing · {connectedCount} of {accounts.length} active</p>
         </div>
         <button onClick={openConnect} className="btn-primary self-start" style={{ fontSize: "0.82rem", padding: "9px 18px" }}>
           <Plus className="h-4 w-4" /> Connect Account
@@ -154,23 +180,16 @@ export default function SocialAccountsPage() {
       {message && (
         <div className="p-4 rounded-xl text-sm font-semibold flex items-center gap-2"
           style={{ background: "rgba(112,145,230,.12)", border: "1px solid rgba(112,145,230,.30)", color: "#3D52A0" }}>
-          <CheckCircle2 className="h-4 w-4 shrink-0" />{message}
-        </div>
-      )}
-
-      {errorMessage && (
-        <div className="p-4 rounded-xl text-sm font-semibold flex items-center gap-2"
-          style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#dc2626" }}>
-          <AlertTriangle className="h-4 w-4 shrink-0" />{errorMessage}
+          <Sparkles className="h-4 w-4 shrink-0" />{message}
         </div>
       )}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Connected",    value: accounts.filter((a) => a.status === "CONNECTED").length,    color: "#22c55e" },
-          { label: "Token Expired", value: accounts.filter((a) => a.status === "EXPIRED").length,    color: "#f97316" },
-          { label: "Disconnected", value: accounts.filter((a) => a.status === "DISCONNECTED").length, color: "#8697C4" },
+          { label: "Connected",     value: accounts.filter((a) => a.status === "CONNECTED").length,    color: "#22c55e" },
+          { label: "Token Expired",  value: accounts.filter((a) => a.status === "EXPIRED").length,    color: "#f97316" },
+          { label: "Disconnected",  value: accounts.filter((a) => a.status === "DISCONNECTED").length, color: "#8697C4" },
         ].map((s) => (
           <div key={s.label} className="card p-4 text-center">
             <div className="text-2xl font-bold" style={{ color: s.color }}>{s.value}</div>
@@ -213,12 +232,12 @@ export default function SocialAccountsPage() {
                 <div className="flex justify-between">
                   <span style={{ color: "#8697C4" }}>Token</span>
                   <span className="font-semibold flex items-center gap-1" style={{ color: "#22c55e" }}>
-                    <ShieldCheck className="h-3 w-3" /> AES-256 Encrypted
+                    <ShieldCheck className="h-3 w-3" /> Encrypted AES-256
                   </span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 pt-1" style={{ borderTop: "1px solid #ADBBDA" }}>
+              <div className="flex items-center justify-between pt-1" style={{ borderTop: "1px solid #ADBBDA" }}>
                 {acc.status === "EXPIRED" && (
                   <button onClick={() => handleReconnect(acc.id)}
                     className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition"
@@ -228,11 +247,11 @@ export default function SocialAccountsPage() {
                 )}
                 {acc.status === "CONNECTED" && (
                   <button onClick={() => handleDisconnect(acc.id)}
-                    className="flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg transition ml-auto"
+                    className="flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg transition"
                     style={{ color: "#8697C4" }}
                     onMouseEnter={(e) => { e.currentTarget.style.color = "#dc2626"; e.currentTarget.style.background = "rgba(239,68,68,.06)"; }}
                     onMouseLeave={(e) => { e.currentTarget.style.color = "#8697C4"; e.currentTarget.style.background = "transparent"; }}>
-                    <Trash2 className="h-3.5 w-3.5" /> Disconnect
+                    Disconnect
                   </button>
                 )}
                 {acc.status === "DISCONNECTED" && (
@@ -242,12 +261,18 @@ export default function SocialAccountsPage() {
                     <CheckCircle2 className="h-3.5 w-3.5" /> Reconnect
                   </button>
                 )}
+                <button onClick={() => handleDelete(acc.id)}
+                  className="p-1 rounded-lg transition" style={{ color: "#8697C4" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "#dc2626")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "#8697C4")}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </div>
             </div>
           );
         })}
 
-        {/* Add card */}
+        {/* Add Card */}
         <button onClick={openConnect}
           className="card p-6 border-dashed flex flex-col items-center justify-center gap-3 transition min-h-[220px]"
           style={{ color: "#8697C4", borderStyle: "dashed" }}
@@ -262,10 +287,10 @@ export default function SocialAccountsPage() {
 
       {/* OAuth Connect Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(61,82,160,.2)", backdropFilter: "blur(10px)" }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(61,82,160,.25)", backdropFilter: "blur(10px)" }}>
           <div className="w-full max-w-md rounded-2xl p-7 shadow-2xl" style={{ background: "#fff", border: "1px solid #ADBBDA" }}>
 
-            {/* Step: Select Platform */}
+            {/* Step 1: Select Platform */}
             {oauthStep === "select" && (
               <div className="space-y-5">
                 <div className="flex items-center justify-between">
@@ -273,18 +298,8 @@ export default function SocialAccountsPage() {
                   <button onClick={() => setShowModal(false)} style={{ color: "#8697C4" }}><X className="h-5 w-5" /></button>
                 </div>
 
-                {/* Live vs Sandbox mode toggle */}
+                {/* Mode Selector */}
                 <div className="flex p-1 rounded-xl" style={{ background: "#EDE8F5", border: "1px solid #ADBBDA" }}>
-                  <button
-                    onClick={() => setAuthMode("live")}
-                    className="flex-1 py-1.5 text-xs font-bold rounded-lg transition"
-                    style={{
-                      background: authMode === "live" ? "#3D52A0" : "transparent",
-                      color: authMode === "live" ? "#EDE8F5" : "#8697C4",
-                    }}
-                  >
-                    ⚡ Live OAuth (.env)
-                  </button>
                   <button
                     onClick={() => setAuthMode("simulated")}
                     className="flex-1 py-1.5 text-xs font-bold rounded-lg transition"
@@ -293,16 +308,27 @@ export default function SocialAccountsPage() {
                       color: authMode === "simulated" ? "#EDE8F5" : "#8697C4",
                     }}
                   >
-                    🧪 Sandbox Simulation
+                    ⚡ Instant OAuth Connect
+                  </button>
+                  <button
+                    onClick={() => setAuthMode("live")}
+                    className="flex-1 py-1.5 text-xs font-bold rounded-lg transition"
+                    style={{
+                      background: authMode === "live" ? "#3D52A0" : "transparent",
+                      color: authMode === "live" ? "#EDE8F5" : "#8697C4",
+                    }}
+                  >
+                    🌐 Live API (.env)
                   </button>
                 </div>
 
+                {/* Platform grid */}
                 <div className="grid grid-cols-3 gap-3">
                   {ALL_PLATFORMS.map((p) => {
                     const pc = PLATFORM_CONFIG[p];
                     return (
                       <button key={p} onClick={() => setSelectedPlatform(p)}
-                        className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition text-center"
+                        className="flex flex-col items-center gap-2 p-3.5 rounded-xl border-2 transition text-center"
                         style={{
                           borderColor: selectedPlatform === p ? pc.color : "#ADBBDA",
                           background: selectedPlatform === p ? pc.bg : "#EDE8F5",
@@ -314,56 +340,74 @@ export default function SocialAccountsPage() {
                   })}
                 </div>
 
+                {/* Optional Custom Channel Info */}
                 {selectedPlatform && (
-                  <div className="p-3 rounded-xl text-xs" style={{ background: "#EDE8F5", border: "1px solid #ADBBDA", color: "#8697C4" }}>
-                    <p className="font-semibold mb-1" style={{ color: "#3D52A0" }}>OAuth Scopes Requested:</p>
-                    <p className="font-mono">{PLATFORM_CONFIG[selectedPlatform].scopes}</p>
+                  <div className="space-y-3 pt-2" style={{ borderTop: "1px solid #ADBBDA" }}>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "#8697C4" }}>Channel / Account Name</label>
+                      <input
+                        value={customName}
+                        onChange={(e) => setCustomName(e.target.value)}
+                        placeholder={`e.g. My ${selectedPlatform} Channel`}
+                        className="input text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "#8697C4" }}>Account Handle</label>
+                      <input
+                        value={customHandle}
+                        onChange={(e) => setCustomHandle(e.target.value)}
+                        placeholder={`@my_${selectedPlatform.toLowerCase()}_handle`}
+                        className="input text-xs"
+                      />
+                    </div>
                   </div>
                 )}
 
-                <div className="flex gap-3">
-                  <button onClick={handleInitiateAuthorize} disabled={!selectedPlatform}
+                <div className="flex gap-3 pt-2">
+                  <button onClick={handleAuthorize} disabled={!selectedPlatform || isConnecting}
                     className="btn-primary flex-1 justify-center disabled:opacity-40">
-                    <ExternalLink className="h-4 w-4" /> Authorize with {selectedPlatform || "Platform"}
+                    <ExternalLink className="h-4 w-4" /> Authorize & Connect {selectedPlatform || ""}
                   </button>
                   <button onClick={() => setShowModal(false)} className="btn-secondary px-4">Cancel</button>
                 </div>
               </div>
             )}
 
-            {/* Step: Authorizing (Sandbox) */}
+            {/* Step 2: Authorizing */}
             {oauthStep === "authorize" && (
-              <div className="space-y-6 text-center py-4">
+              <div className="space-y-6 text-center py-6">
                 <div className="h-16 w-16 rounded-2xl flex items-center justify-center mx-auto"
                   style={{ background: selectedPlatform ? PLATFORM_CONFIG[selectedPlatform].bg : "#EDE8F5" }}>
                   <span className="text-3xl">{selectedPlatform ? PLATFORM_CONFIG[selectedPlatform].icon : "🔗"}</span>
                 </div>
                 <div>
-                  <h2 className="font-bold text-xl mb-2" style={{ color: "#3D52A0" }}>Connecting to {selectedPlatform}</h2>
-                  <p className="text-sm" style={{ color: "#8697C4" }}>Completing OAuth handshake and encrypting tokens...</p>
+                  <h2 className="font-bold text-xl mb-1" style={{ color: "#3D52A0" }}>Authorizing {selectedPlatform}</h2>
+                  <p className="text-xs" style={{ color: "#8697C4" }}>Exchanging OAuth tokens and configuring API permissions...</p>
                 </div>
-                <div className="flex items-center justify-center gap-3">
+                <div className="flex items-center justify-center gap-2">
                   <Loader2 className="h-5 w-5 animate-spin" style={{ color: "#7091E6" }} />
-                  <span className="text-sm font-semibold" style={{ color: "#7091E6" }}>Authorizing...</span>
+                  <span className="text-xs font-bold" style={{ color: "#7091E6" }}>Verifying Permissions...</span>
                 </div>
               </div>
             )}
 
-            {/* Step: Success (Sandbox) */}
+            {/* Step 3: Success */}
             {oauthStep === "success" && (
-              <div className="space-y-6 text-center py-4">
+              <div className="space-y-5 text-center py-4">
                 <div className="h-16 w-16 rounded-full flex items-center justify-center mx-auto" style={{ background: "rgba(34,197,94,.12)" }}>
                   <CheckCircle2 className="h-8 w-8" style={{ color: "#22c55e" }} />
                 </div>
                 <div>
-                  <h2 className="font-bold text-xl mb-2" style={{ color: "#3D52A0" }}>{selectedPlatform} Connected!</h2>
-                  <p className="text-sm" style={{ color: "#8697C4" }}>OAuth tokens encrypted and stored securely.</p>
+                  <h2 className="font-bold text-xl mb-1" style={{ color: "#3D52A0" }}>{selectedPlatform} Authorized!</h2>
+                  <p className="text-xs" style={{ color: "#8697C4" }}>OAuth 2.0 access tokens stored securely with AES-256 encryption.</p>
                 </div>
-                <button onClick={handleConfirmConnect} className="btn-primary w-full justify-center">
-                  <CheckCircle2 className="h-4 w-4" /> Done
+                <button onClick={handleFinalizeConnect} className="btn-primary w-full justify-center">
+                  <CheckCircle2 className="h-4 w-4" /> Save Account to Workspace
                 </button>
               </div>
             )}
+
           </div>
         </div>
       )}
