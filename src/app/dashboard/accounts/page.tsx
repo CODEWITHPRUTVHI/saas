@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { Share2, Plus, ShieldCheck, X, CheckCircle2, Loader2, Trash2, RefreshCw, ExternalLink, Sparkles } from "lucide-react";
+import { Share2, Plus, ShieldCheck, X, CheckCircle2, Loader2, Trash2, RefreshCw, ExternalLink, Sparkles, Key } from "lucide-react";
 
 interface SocialAccount {
   id: string;
@@ -41,7 +41,9 @@ export default function SocialAccountsPage() {
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
   const [customName, setCustomName] = useState("");
   const [customHandle, setCustomHandle] = useState("");
-  const [authMode, setAuthMode] = useState<"simulated" | "live">("simulated");
+  const [authMode, setAuthMode] = useState<"standard" | "byok">("standard");
+  const [customClientId, setCustomClientId] = useState("");
+  const [customAccessToken, setCustomAccessToken] = useState("");
   const [isConnecting, setIsConnecting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -301,24 +303,24 @@ export default function SocialAccountsPage() {
                 {/* Mode Selector */}
                 <div className="flex p-1 rounded-xl" style={{ background: "#EDE8F5", border: "1px solid #ADBBDA" }}>
                   <button
-                    onClick={() => setAuthMode("simulated")}
-                    className="flex-1 py-1.5 text-xs font-bold rounded-lg transition"
+                    onClick={() => setAuthMode("standard")}
+                    className="flex-1 py-2 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5"
                     style={{
-                      background: authMode === "simulated" ? "#3D52A0" : "transparent",
-                      color: authMode === "simulated" ? "#EDE8F5" : "#8697C4",
+                      background: authMode === "standard" ? "#3D52A0" : "transparent",
+                      color: authMode === "standard" ? "#EDE8F5" : "#8697C4",
                     }}
                   >
-                    ⚡ Instant OAuth Connect
+                    ⚡ Standard 1-Click Connect
                   </button>
                   <button
-                    onClick={() => setAuthMode("live")}
-                    className="flex-1 py-1.5 text-xs font-bold rounded-lg transition"
+                    onClick={() => setAuthMode("byok")}
+                    className="flex-1 py-2 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5"
                     style={{
-                      background: authMode === "live" ? "#3D52A0" : "transparent",
-                      color: authMode === "live" ? "#EDE8F5" : "#8697C4",
+                      background: authMode === "byok" ? "#3D52A0" : "transparent",
+                      color: authMode === "byok" ? "#EDE8F5" : "#8697C4",
                     }}
                   >
-                    🌐 Live API (.env)
+                    🔑 Custom API Key (BYOK)
                   </button>
                 </div>
 
@@ -328,7 +330,7 @@ export default function SocialAccountsPage() {
                     const pc = PLATFORM_CONFIG[p];
                     return (
                       <button key={p} onClick={() => setSelectedPlatform(p)}
-                        className="flex flex-col items-center gap-2 p-3.5 rounded-xl border-2 transition text-center"
+                        className="flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition text-center"
                         style={{
                           borderColor: selectedPlatform === p ? pc.color : "#ADBBDA",
                           background: selectedPlatform === p ? pc.bg : "#EDE8F5",
@@ -339,6 +341,35 @@ export default function SocialAccountsPage() {
                     );
                   })}
                 </div>
+
+                {/* Custom BYOK API Key Fields */}
+                {authMode === "byok" && selectedPlatform && (
+                  <div className="p-3.5 rounded-xl space-y-3" style={{ background: "#EDE8F5", border: "1px solid #ADBBDA" }}>
+                    <div className="text-xs font-bold flex items-center gap-1.5" style={{ color: "#3D52A0" }}>
+                      <Key className="h-4 w-4" /> Enter Your {selectedPlatform} API Credentials
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#8697C4" }}>Client ID / App ID</label>
+                      <input
+                        value={customClientId}
+                        onChange={(e) => setCustomClientId(e.target.value)}
+                        placeholder={`e.g. ${selectedPlatform.toLowerCase()}_client_id_xxx`}
+                        className="input text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#8697C4" }}>Personal Access Token / API Key</label>
+                      <input
+                        type="password"
+                        value={customAccessToken}
+                        onChange={(e) => setCustomAccessToken(e.target.value)}
+                        placeholder={`e.g. ya29.a0Ax...`}
+                        className="input text-xs"
+                      />
+                    </div>
+                    <p className="text-[10px]" style={{ color: "#8697C4" }}>🔐 Encrypted with AES-256 in user database. Never stored in plain text.</p>
+                  </div>
+                )}
 
                 {/* Optional Custom Channel Info */}
                 {selectedPlatform && (
