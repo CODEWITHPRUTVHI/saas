@@ -1,300 +1,389 @@
 "use client";
 
-import { useState } from "react";
-import {
-  FolderSync, CalendarDays, Cpu, Share2, Sparkles,
-  Clock, Play, Layers, ArrowUpRight, TrendingUp, Plus, RefreshCw,
-} from "lucide-react";
+import { useState, useEffect } from "react";
+import { Users, Eye, Target, Plus, ArrowRight, CheckCircle2, RefreshCw, BarChart3 } from "lucide-react";
 import { getSession } from "@/lib/auth";
 
-const QUEUE_ITEMS = [
-  { platform: "YouTube",   icon: "▶",  color: "#3D52A0", bg: "rgba(61,82,160,.10)",  title: "Building Enterprise AI Content OS Pipelines", time: "Today • 16:30", status: "Ready" },
-  { platform: "Instagram", icon: "📸", color: "#7091E6", bg: "rgba(112,145,230,.10)", title: "Reels Cut: Turn 1 Raw Video into 5 Platform Cuts", time: "Today • 19:30", status: "Queued" },
-  { platform: "TikTok",    icon: "🎵", color: "#8697C4", bg: "rgba(134,151,196,.10)", title: "TikTok Vertical: Zero Manual Editing Pipeline Demo", time: "Tomorrow • 09:00", status: "Queued" },
-  { platform: "LinkedIn",  icon: "💼", color: "#ADBBDA", bg: "rgba(173,187,218,.15)", title: "Enterprise Workflow Automation — Behind the Stack", time: "Tomorrow • 14:00", status: "Queued" },
+/* ── Feature Cards Definitions (Metricool Summary style) ───────────────────── */
+const FEATURE_CARDS = [
+  {
+    title: "How your community grows",
+    desc: "Track the evolution of your followers across all your networks from",
+    descLink: "one place.",
+    metric: "69.4K",
+    metricSub: "+12.4% Monthly",
+    icon: Users,
+    color: "#3D52A0",
+    chartType: "line",
+    chartData: [30, 35, 40, 38, 50, 55, 58, 69],
+    chartColor: "#7091E6",
+  },
+  {
+    title: "The real reach of your posts",
+    desc: "Discover the reach of your posts on each network and which content",
+    descLink: "performs best.",
+    metric: "38.2K",
+    metricSub: "+15.6% vs last month",
+    icon: Eye,
+    color: "#7091E6",
+    chartType: "bars",
+    posts: [
+      { label: "Reel · Behind the scenes", val: 78, color: "#E1306C" },
+      { label: "Carousel · Product launch",  val: 51, color: "#1877F2" },
+      { label: "Video · Tutorial",          val: 36, color: "#010101" },
+    ],
+  },
+  {
+    title: "Your ad campaigns, at a glance",
+    desc: "Analyze the performance of your ads across all platforms without",
+    descLink: "switching screens.",
+    metric: "3.4x",
+    metricSub: "Avg. ROAS",
+    icon: Target,
+    color: "#8697C4",
+    chartType: "campaigns",
+    campaigns: [
+      { label: "Summer Sale",       val: "$1.2K", perf: 84, color: "#3D52A0" },
+      { label: "Brand Awareness",   val: "$3.3x",  perf: 60, color: "#7091E6" },
+      { label: "Promo Launch",      val: "$2.6x",  perf: 45, color: "#8697C4" },
+    ],
+  },
 ];
 
-const PLATFORMS_CONNECTED = [
-  { name: "YouTube",   followers: "12.4K", color: "#3D52A0", pct: 82 },
-  { name: "Instagram", followers: "8.7K",  color: "#7091E6", pct: 63 },
-  { name: "TikTok",    followers: "31.2K", color: "#8697C4", pct: 95 },
-  { name: "LinkedIn",  followers: "5.1K",  color: "#ADBBDA", pct: 41 },
-];
+/* ── Mini Line Chart ──────────────────────────────────────────────────────── */
+function MiniLineChart({ data, color }: { data: number[]; color: string }) {
+  const max = Math.max(...data), min = Math.min(...data);
+  const range = max - min || 1;
+  const w = 200, h = 60, pts = data.length;
 
-export default function DashboardOverview() {
-  const session = getSession();
-  const [transcript, setTranscript] = useState(
-    "Demonstrating our AI Content Distribution OS. Raw video files placed into monitored Google Drive folders are automatically parsed, passed to Claude for structured multi-channel JSON metadata generation, and enqueued into a smart timezone-aware publishing queue for YouTube, Instagram Reels, and TikTok."
+  const points = data.map((v, i) => {
+    const x = (i / (pts - 1)) * w;
+    const y = h - ((v - min) / range) * (h - 12) - 6;
+    return `${x},${y}`;
+  }).join(" ");
+
+  const areaPoints = `0,${h} ${points} ${w},${h}`;
+  const id = `line-area-${color.replace("#", "")}`;
+
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none">
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.25" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polygon points={areaPoints} fill={`url(#${id})`} />
+      <polyline points={points} stroke={color} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      {/* X-axis labels */}
+      {["W1", "W2", "W3", "W4", "W5", "W6", "Nov"].map((label, i) => (
+        i < 7 && (
+          <text
+            key={label}
+            x={(i / 6) * w}
+            y={h + 14}
+            fontSize="9"
+            fill="#8697C4"
+            textAnchor="middle"
+            fontFamily="Plus Jakarta Sans"
+          >
+            {label}
+          </text>
+        )
+      ))}
+    </svg>
   );
-  const [aiResult, setAiResult] = useState<any>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [activeTab, setActiveTab] = useState<"youtube" | "instagram" | "tiktok" | "linkedin">("youtube");
+}
 
-  async function handleGenerate() {
-    setIsGenerating(true);
-    try {
-      const res = await fetch("/api/ai/generate-metadata", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript, brandVoiceProfile: "Futuristic, energetic, data-driven" }),
-      });
-      const data = await res.json();
-      if (data.success) setAiResult(data.metadata);
-    } catch {}
-    finally { setIsGenerating(false); }
+/* ── Platform Connect Buttons (Metricool Connect Modal Style) ─────────────── */
+const PLATFORMS = [
+  { name: "Instagram",       icon: "IG", btnText: "Connect an Instagram professional account", btnColor: "#E1306C", textColor: "#fff" },
+  { name: "Tiktok",          icon: "TT", btnText: "Connect a TikTok personal account",         btnColor: "#010101", textColor: "#fff" },
+  { name: "Twitter",         icon: "𝕏",  btnText: "Connect a Twitter / X account",            btnColor: "#f9f9e8", textColor: "#3D52A0", outlined: true },
+  { name: "LinkedIn",        icon: "in", btnText: "Reconnect LinkedIn",                        btnColor: "#f9f9e8", textColor: "#3D52A0", outlined: true },
+  { name: "Tiktok Business", icon: "TT", btnText: "Connect a TikTok business account",        btnColor: "#010101", textColor: "#fff" },
+  { name: "Youtube",         icon: "▶",  btnText: "Connect a YouTube channel",                btnColor: "#FF0000", textColor: "#fff" },
+];
+
+const PLATFORM_ICONS = [
+  { emoji: "🔷", label: "Google" },
+  { emoji: "💼", label: "LinkedIn" },
+  { emoji: "📌", label: "Pinterest" },
+  { emoji: "🎮", label: "Twitch" },
+  { emoji: "🔵", label: "Meta" },
+  { emoji: "🔺", label: "Ads" },
+  { emoji: "🦋", label: "Bluesky" },
+];
+
+export default function SummaryPage() {
+  const session = getSession();
+  const [showConnectModal, setShowConnectModal] = useState(false);
+  const [connecting, setConnecting] = useState<string | null>(null);
+  const [connected, setConnected] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const t = setTimeout(() => setIsLoading(false), 600);
+    return () => clearTimeout(t);
+  }, []);
+
+  async function handleConnect(name: string) {
+    setConnecting(name);
+    await new Promise(r => setTimeout(r, 1200));
+    setConnected(prev => [...prev, name]);
+    setConnecting(null);
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-3">
+          <RefreshCw className="h-8 w-8 text-[#3D52A0] animate-spin" />
+          <p className="text-sm font-bold text-[#8697C4]">Loading workspace data...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6 animate-in">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="max-w-[960px] mx-auto animate-in">
+
+      {/* ── Hero Title Section ──────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8">
         <div>
-          <h1 className="page-title">
-            Welcome back, {session?.name?.split(" ")[0] || "there"} 👋
+          <h1 className="text-2xl font-extrabold text-[#3D52A0] tracking-tight leading-tight">
+            Understand what works and make data-driven decisions
           </h1>
-          <p className="page-subtitle">AI-powered publishing pipeline · All systems operational</p>
+          <p className="text-sm text-[#8697C4] mt-1.5 max-w-xl">
+            Analyze your community, the <span className="font-bold text-[#3D52A0]">reach of your posts</span> and your ad campaigns from a single dashboard.
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1.5 badge badge-success text-xs px-3 py-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 pulse-dot" />
-            Live
-          </span>
-          <button className="btn-primary" style={{ padding: "9px 18px", fontSize: "0.8rem", borderRadius: "10px" }}>
-            <Plus className="h-3.5 w-3.5" />
-            New Content
+        <button
+          onClick={() => setShowConnectModal(true)}
+          className="btn-primary whitespace-nowrap shrink-0 text-xs self-start"
+        >
+          Connect social networks
+        </button>
+      </div>
+
+      {/* ── 3-Column Feature Cards (Metricool Summary Style) ──────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+        {FEATURE_CARDS.map((card, i) => {
+          const Icon = card.icon;
+          return (
+            <div
+              key={card.title}
+              className="card p-5 border border-[#ADBBDA] bg-white hover:border-[#7091E6] transition-all"
+              style={{ animationDelay: `${i * 80}ms` }}
+            >
+              {/* Card Header */}
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1 pr-2">
+                  <h3 className="text-sm font-extrabold text-[#3D52A0] leading-tight">{card.title}</h3>
+                  <p className="text-xs text-[#8697C4] mt-1 leading-relaxed">
+                    {card.desc}{" "}
+                    <span className="font-bold text-[#7091E6] cursor-pointer hover:underline">{card.descLink}</span>
+                  </p>
+                </div>
+                <div
+                  className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0"
+                  style={{ background: `${card.color}15`, border: `1px solid ${card.color}30` }}
+                >
+                  <Icon className="h-5 w-5" style={{ color: card.color }} />
+                </div>
+              </div>
+
+              {/* Chart Visualization Area */}
+              <div className="bg-[#EDE8F5]/40 rounded-xl border border-[#ADBBDA]/60 p-3 mb-3 min-h-[120px] flex flex-col justify-end">
+                {card.chartType === "line" && card.chartData && (
+                  <div>
+                    <div className="flex items-baseline justify-between mb-1">
+                      <span className="text-[11px] font-extrabold text-[#3D52A0]">Followers</span>
+                      <span className="text-[10px] font-bold text-[#059669] bg-[#ECFDF5] px-1.5 rounded">
+                        {card.metricSub.split(" ")[0]}
+                      </span>
+                    </div>
+                    <MiniLineChart data={card.chartData} color={card.chartColor || card.color} />
+                  </div>
+                )}
+
+                {card.chartType === "bars" && card.posts && (
+                  <div className="space-y-2">
+                    {card.posts.map((post) => (
+                      <div key={post.label}>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-[10px] font-bold text-[#3D52A0] truncate max-w-[140px]">{post.label}</span>
+                          <span className="text-[10px] font-extrabold" style={{ color: post.color }}>{post.val}%</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-[#ADBBDA]/40 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-700"
+                            style={{ width: `${post.val}%`, background: post.color }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {card.chartType === "campaigns" && card.campaigns && (
+                  <div className="space-y-2">
+                    {card.campaigns.map((campaign) => (
+                      <div key={campaign.label} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="h-2 w-2 rounded-full shrink-0" style={{ background: campaign.color }} />
+                          <span className="text-[10px] font-bold text-[#3D52A0] truncate">{campaign.label}</span>
+                        </div>
+                        <span className="text-[10px] font-extrabold text-[#3D52A0] shrink-0 ml-2">{campaign.val}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Metric Footer */}
+              <div className="flex items-end justify-between">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-[#8697C4]">
+                    {card.chartType === "line" ? "Total Followers" : card.chartType === "bars" ? "Total Reach" : "Avg. ROAS"}
+                  </span>
+                  <div className="text-xl font-extrabold text-[#3D52A0] tracking-tight">{card.metric}</div>
+                  <div className="text-[11px] font-semibold text-[#8697C4]">{card.metricSub}</div>
+                </div>
+                <ArrowRight className="h-4 w-4 text-[#ADBBDA]" />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Connect Social Networks CTA Section ───────────────────────── */}
+      <div className="card p-8 border border-[#ADBBDA] bg-white relative overflow-hidden">
+        {/* Decorative background */}
+        <div className="absolute right-0 top-0 w-64 h-full opacity-30 pointer-events-none">
+          <svg viewBox="0 0 200 200" className="w-full h-full" fill="none">
+            <path d="M0 100 Q100 0 200 100 Q100 200 0 100Z" fill="#7091E6" opacity="0.15" />
+          </svg>
+        </div>
+
+        <div className="relative z-10 max-w-lg">
+          <h2 className="text-xl font-extrabold text-[#3D52A0] mb-1">Connect social networks</h2>
+          <p className="text-sm text-[#8697C4] mb-5">
+            Connect your accounts to unlock analytics,{" "}
+            <span className="font-bold text-[#7091E6]">scheduling</span> and{" "}
+            <span className="font-bold text-[#7091E6]">content management.</span>
+          </p>
+          <button
+            onClick={() => setShowConnectModal(true)}
+            className="btn-secondary text-sm font-bold"
+          >
+            Connect social networks
           </button>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "Folder Watchers",  value: "2 Active",      sub: "Google Drive + Local",    icon: FolderSync,   iconColor: "#3D52A0", trend: null },
-          { label: "Queue Entries",    value: "6 Scheduled",   sub: "Next post in 15 mins",    icon: CalendarDays, iconColor: "#7091E6", trend: "+2 today" },
-          { label: "AI Jobs Today",    value: "12 Completed",  sub: "100% valid JSON output",  icon: Cpu,          iconColor: "#8697C4", trend: null },
-          { label: "Social Accounts",  value: "4 Connected",   sub: "YouTube · IG · TikTok",   icon: Share2,       iconColor: "#ADBBDA", trend: null },
-        ].map(({ label, value, sub, icon: Icon, iconColor, trend }) => (
-          <div key={label} className="metric-card">
-            <div className="flex items-start justify-between mb-3">
-              <div className="p-2 rounded-xl" style={{ background: "rgba(61,82,160,.08)" }}>
-                <Icon className="h-4 w-4" style={{ color: iconColor }} />
-              </div>
-              {trend && (
-                <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-600">
-                  <TrendingUp className="h-3 w-3" /> {trend}
-                </span>
-              )}
-            </div>
-            <div className="font-bold text-xl leading-tight" style={{ color: "#3D52A0" }}>{value}</div>
-            <div className="text-xs mt-1" style={{ color: "#8697C4" }}>{label}</div>
-            <div className="text-[11px] mt-0.5 font-medium" style={{ color: "#ADBBDA" }}>{sub}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Platform Performance */}
-      <div className="card p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="font-bold text-[15px]" style={{ color: "#3D52A0" }}>Platform Performance</h2>
-            <p className="text-xs mt-0.5" style={{ color: "#8697C4" }}>Last 30 days</p>
-          </div>
-          <a href="/dashboard/analytics" className="flex items-center gap-1 text-xs font-semibold hover:underline" style={{ color: "#7091E6" }}>
-            Full Analytics <ArrowUpRight className="h-3.5 w-3.5" />
-          </a>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {PLATFORMS_CONNECTED.map((p) => (
-            <div key={p.name} className="p-4 rounded-xl transition" style={{ background: "#EDE8F5", border: "1px solid #ADBBDA" }}>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="h-2 w-2 rounded-full" style={{ background: p.color }} />
-                <span className="text-xs font-bold" style={{ color: "#8697C4" }}>{p.name}</span>
-              </div>
-              <div className="font-bold text-lg" style={{ color: "#3D52A0" }}>{p.followers}</div>
-              <div className="text-[11px] font-medium" style={{ color: "#8697C4" }}>Followers</div>
-              <div className="mt-3 h-1.5 rounded-full overflow-hidden" style={{ background: "#ADBBDA" }}>
-                <div className="h-full rounded-full transition-all" style={{ width: `${p.pct}%`, background: p.color }} />
+      {/* ── Connect Social Networks Modal (Metricool Style) ───────────── */}
+      {showConnectModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(61,82,160,0.2)", backdropFilter: "blur(8px)" }}
+          onClick={(e) => e.target === e.currentTarget && setShowConnectModal(false)}
+        >
+          <div className="bg-white w-full max-w-[640px] rounded-2xl shadow-2xl border border-[#ADBBDA] overflow-hidden animate-in">
+            {/* Modal Header */}
+            <div className="px-8 pt-7 pb-4 border-b border-[#ADBBDA]">
+              <h2 className="text-xl font-extrabold text-[#3D52A0]">Connect your social networks</h2>
+              <p className="text-sm text-[#8697C4] mt-1">
+                Link your DROX workspace with your social networks. You can modify it later.
+              </p>
+              {/* Multicolor Progress Bar */}
+              <div className="h-1 w-full mt-4 rounded-full overflow-hidden flex">
+                <div className="h-full w-1/4 bg-[#3D52A0]" />
+                <div className="h-full w-1/4 bg-[#7091E6]" />
+                <div className="h-full w-1/4 bg-[#ADBBDA]" />
+                <div className="h-full w-1/4 bg-[#EDE8F5]" />
               </div>
             </div>
-          ))}
-        </div>
-      </div>
 
-      {/* Main Grid: Queue + Watchers */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Smart Queue */}
-        <div className="lg:col-span-2 card p-0 overflow-hidden">
-          <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid #ADBBDA" }}>
-            <div>
-              <h2 className="font-bold text-[15px]" style={{ color: "#3D52A0" }}>Smart Publishing Queue</h2>
-              <p className="text-xs mt-0.5" style={{ color: "#8697C4" }}>Timezone-optimized scheduling</p>
-            </div>
-            <span className="badge badge-info">6 Due</span>
-          </div>
-          <div className="divide-y" style={{ borderColor: "#ADBBDA" }}>
-            {QUEUE_ITEMS.map((item, i) => (
-              <div key={i} className="px-6 py-4 flex items-center gap-4 transition" style={{ background: "transparent" }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#EDE8F5")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-              >
-                <div className="h-9 w-9 rounded-xl flex items-center justify-center text-lg shrink-0" style={{ background: item.bg }}>
-                  {item.icon}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold line-clamp-1" style={{ color: "#3D52A0" }}>{item.title}</p>
-                  <p className="text-xs flex items-center gap-1 mt-0.5" style={{ color: "#8697C4" }}>
-                    <Clock className="h-3 w-3" /> {item.time}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: item.bg, color: item.color }}>
-                    {item.status}
-                  </span>
-                  <div className="h-4 w-4 rounded-full border-2 flex items-center justify-center" style={{ borderColor: item.color }}>
-                    {item.status === "Ready" && <div className="h-2 w-2 rounded-full" style={{ background: item.color }} />}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="px-6 py-3" style={{ borderTop: "1px solid #ADBBDA", background: "#EDE8F5" }}>
-            <a href="/dashboard/queue" className="text-xs font-semibold flex items-center gap-1 hover:underline" style={{ color: "#7091E6" }}>
-              View full queue <ArrowUpRight className="h-3.5 w-3.5" />
-            </a>
-          </div>
-        </div>
+            {/* Platform Grid */}
+            <div className="px-8 py-6 grid grid-cols-2 gap-5">
+              {PLATFORMS.map((p) => {
+                const isConnected = connected.includes(p.name);
+                const isConnecting = connecting === p.name;
 
-        {/* Watchers Panel */}
-        <div className="card p-0 overflow-hidden">
-          <div className="px-5 py-4" style={{ borderBottom: "1px solid #ADBBDA" }}>
-            <h2 className="font-bold text-[15px]" style={{ color: "#3D52A0" }}>Folder Watchers</h2>
-            <p className="text-xs mt-0.5" style={{ color: "#8697C4" }}>Autonomous file ingest</p>
-          </div>
-          <div className="p-5 space-y-3">
-            {[
-              { name: "Google Drive", path: "HyperGrowth/RawIngest", polled: "15m ago", synced: "1 file",  active: true },
-              { name: "Local Studio", path: "/Volumes/Media/RawDrop",  polled: "45m ago", synced: "Idle",    active: true },
-              { name: "Dropbox",      path: "Not connected",           polled: "—",       synced: "—",        active: false },
-            ].map((w, i) => (
-              <div key={i} className="p-4 rounded-xl transition" style={{ background: "#EDE8F5", border: "1px solid #ADBBDA" }}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold" style={{ color: "#3D52A0" }}>{w.name}</span>
-                  <span className={`badge ${w.active ? "badge-success" : "badge-neutral"}`}>
-                    {w.active ? "Active" : "Off"}
-                  </span>
-                </div>
-                <p className="text-[11px] font-mono truncate" style={{ color: "#8697C4" }}>{w.path}</p>
-                {w.active && (
-                  <div className="flex items-center justify-between mt-2 text-[11px]" style={{ color: "#8697C4" }}>
-                    <span>Polled {w.polled}</span>
-                    <span className="font-semibold" style={{ color: "#3D52A0" }}>{w.synced}</span>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="px-5 pb-5">
-            <a href="/dashboard/watchers"
-              className="flex items-center justify-center gap-2 w-full py-2 rounded-xl text-xs font-semibold transition"
-              style={{ border: "1px solid #ADBBDA", color: "#8697C4" }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = "#3D52A0"; e.currentTarget.style.borderColor = "#3D52A0"; e.currentTarget.style.background = "#EDE8F5"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = "#8697C4"; e.currentTarget.style.borderColor = "#ADBBDA"; e.currentTarget.style.background = "transparent"; }}
-            >
-              <Plus className="h-3.5 w-3.5" /> Add Storage
-            </a>
-          </div>
-        </div>
-      </div>
+                return (
+                  <div key={p.name}>
+                    {/* Platform Label */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <div
+                        className="h-7 w-7 rounded-lg flex items-center justify-center text-[11px] font-black border"
+                        style={{ color: p.btnColor === "#f9f9e8" ? "#3D52A0" : p.btnColor, borderColor: "#ADBBDA", background: "#EDE8F5" }}
+                      >
+                        {p.icon}
+                      </div>
+                      <span className="font-extrabold text-sm text-[#3D52A0]">{p.name}</span>
+                    </div>
 
-      {/* AI SEO Generator */}
-      <div className="card overflow-hidden">
-        <div className="h-1 gradient-stripe" />
-        <div className="p-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5">
-            <div>
-              <h2 className="font-bold text-[15px] flex items-center gap-2" style={{ color: "#3D52A0" }}>
-                <Sparkles className="h-4 w-4" style={{ color: "#7091E6" }} />
-                AI Multi-Platform Metadata Generator
-              </h2>
-              <p className="text-xs mt-0.5" style={{ color: "#8697C4" }}>Paste transcript → AI generates structured metadata for all channels</p>
-            </div>
-            <button
-              onClick={handleGenerate}
-              disabled={isGenerating}
-              className="btn-primary disabled:opacity-50 shrink-0"
-              style={{ padding: "10px 20px", fontSize: "0.85rem", borderRadius: "10px" }}
-            >
-              {isGenerating ? <><RefreshCw className="h-4 w-4 animate-spin" /> Generating...</> : <><Play className="h-4 w-4 fill-current" /> Generate Metadata</>}
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <div>
-              <label className="text-micro mb-2 block">Raw Input</label>
-              <textarea
-                value={transcript}
-                onChange={(e) => setTranscript(e.target.value)}
-                rows={7}
-                className="input font-mono text-xs leading-relaxed resize-none"
-                placeholder="Paste video transcript or content summary..."
-              />
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-micro">Platform Output</label>
-                <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: "#EDE8F5", border: "1px solid #ADBBDA" }}>
-                  {(["youtube", "instagram", "tiktok", "linkedin"] as const).map((tab) => (
+                    {/* Connect Button */}
                     <button
-                      key={tab}
-                      onClick={() => setActiveTab(tab)}
-                      className="px-2.5 py-1 rounded-md text-xs font-semibold capitalize transition"
+                      onClick={() => !isConnected && handleConnect(p.name)}
+                      disabled={isConnecting}
+                      className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl text-sm font-bold transition-all"
                       style={{
-                        background: activeTab === tab ? "#3D52A0" : "transparent",
-                        color: activeTab === tab ? "#EDE8F5" : "#8697C4",
+                        background: isConnected ? "#ECFDF5" : p.btnColor,
+                        color: isConnected ? "#059669" : p.textColor,
+                        border: isConnected ? "1px solid #A7F3D0" : p.outlined ? "1px solid #ADBBDA" : "none",
+                        cursor: isConnected ? "default" : "pointer",
                       }}
                     >
-                      {tab}
+                      <span>
+                        {isConnecting ? "Connecting..." :
+                         isConnected  ? "✓ Connected" :
+                         p.btnText}
+                      </span>
+                      {isConnecting ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" style={{ color: p.textColor }} />
+                      ) : isConnected ? (
+                        <CheckCircle2 className="h-4 w-4 text-[#059669]" />
+                      ) : (
+                        <span className="text-lg font-black opacity-80">{p.icon}</span>
+                      )}
                     </button>
-                  ))}
-                </div>
-              </div>
-              <div className="input h-[170px] overflow-y-auto font-mono text-xs leading-relaxed p-3" style={{ background: "#EDE8F5" }}>
-                {aiResult ? (
-                  <div className="space-y-2">
-                    {activeTab === "youtube" && (
-                      <>
-                        <p className="font-bold" style={{ color: "#3D52A0" }}>{aiResult.youtube?.title}</p>
-                        <p style={{ color: "#8697C4" }}>{aiResult.youtube?.description?.slice(0, 200)}...</p>
-                        <p style={{ color: "#7091E6" }}>{aiResult.youtube?.tags?.slice(0, 6).join(" · ")}</p>
-                      </>
-                    )}
-                    {activeTab === "instagram" && (
-                      <>
-                        <p style={{ color: "#8697C4" }}>{aiResult.instagram?.caption?.slice(0, 200)}...</p>
-                        <p className="font-semibold" style={{ color: "#7091E6" }}>{aiResult.instagram?.hashtags?.slice(0, 8).join(" ")}</p>
-                      </>
-                    )}
-                    {activeTab === "tiktok" && (
-                      <>
-                        <p style={{ color: "#8697C4" }}>{aiResult.tiktok?.caption}</p>
-                        <p style={{ color: "#7091E6" }}>{aiResult.tiktok?.keywords?.join(", ")}</p>
-                      </>
-                    )}
-                    {activeTab === "linkedin" && (
-                      <p style={{ color: "#8697C4" }}>{aiResult.linkedin?.post?.slice(0, 300)}...</p>
-                    )}
                   </div>
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center gap-2" style={{ color: "#ADBBDA" }}>
-                    <Layers className="h-6 w-6 opacity-50" />
-                    <p className="text-[11px]">Click Generate to run the AI engine</p>
-                  </div>
-                )}
+                );
+              })}
+            </div>
+
+            {/* Partnership Footer */}
+            <div className="px-8 pb-4 text-center">
+              <p className="text-xs text-[#8697C4] font-medium mb-2">DROX is a partner of Google and Meta and is authorized by:</p>
+              <div className="flex items-center justify-center gap-3 text-base">
+                {PLATFORM_ICONS.map((p) => (
+                  <span key={p.label} title={p.label} className="cursor-default">{p.emoji}</span>
+                ))}
               </div>
+            </div>
+
+            {/* Modal Footer Buttons */}
+            <div className="flex items-center justify-between px-8 py-4 border-t border-[#ADBBDA] bg-[#EDE8F5]/40">
+              <button
+                onClick={() => setShowConnectModal(false)}
+                className="btn-secondary text-sm font-bold"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => setShowConnectModal(false)}
+                className="btn-primary text-sm font-bold"
+                style={{ background: "#3D52A0" }}
+              >
+                Finish
+              </button>
             </div>
           </div>
         </div>
-      </div>
+      )}
+
     </div>
   );
 }

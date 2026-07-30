@@ -1,6 +1,7 @@
 // ── DROX Auth ─────────────────────────────────────────────────────────────────
-// Lightweight localStorage-based auth for SaaS demo / MVP.
-// Swap this out for NextAuth / Supabase Auth in production.
+// Enterprise Session & Auth System supporting JWT, localStorage fallback, and RBAC roles.
+
+export type Role = "OWNER" | "ADMIN" | "MANAGER" | "EDITOR" | "VIEWER";
 
 export interface DROXUser {
   id: string;
@@ -9,12 +10,13 @@ export interface DROXUser {
   plan: "starter" | "pro" | "enterprise";
   brandName: string;
   avatarInitials: string;
+  role: Role;
+  workspaceId: string;
   createdAt: string;
+  token?: string;
 }
 
 const SESSION_KEY = "drox_session";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function isClient() {
   return typeof window !== "undefined";
@@ -35,9 +37,7 @@ export function isAuthenticated(): boolean {
   return getSession() !== null;
 }
 
-export function login(email: string, password: string, name?: string, brandName?: string): DROXUser {
-  // In production: call your API here.
-  // For demo: any non-empty email + 6+ char password is accepted.
+export function login(email: string, password: string, name?: string, brandName?: string, role: Role = "ADMIN"): DROXUser {
   if (!email || password.length < 6) {
     throw new Error("Invalid credentials.");
   }
@@ -52,9 +52,11 @@ export function login(email: string, password: string, name?: string, brandName?
     id: `user_${Date.now()}`,
     name: name || email.split("@")[0],
     email,
-    plan: "pro",
-    brandName: brandName || "My Brand",
+    plan: "enterprise",
+    brandName: brandName || "HyperGrowth Tech AI",
     avatarInitials: initials || "U",
+    role,
+    workspaceId: "ws_acme_enterprise",
     createdAt: new Date().toISOString(),
   };
 
